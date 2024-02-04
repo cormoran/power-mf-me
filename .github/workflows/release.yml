@@ -1,0 +1,65 @@
+name: Release and Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      version-component:
+        description: 'Version component to increment (major, minor, or patch)'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+
+permissions:
+  contents: write
+
+jobs:
+  release_and_deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: 16
+          cache: 'npm'
+      - name: Set git config
+        run: |
+          git config --global user.email 'cormoran707@gmail.com'
+          git config --global user.name 'cormoran'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Set version to env
+        run: echo "VERSION=$(node -p -e "require('./package.json').version")" >> $GITHUB_ENV
+
+      - name: Build
+        run: npm run build
+
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ env.VERSION }}
+          files: |
+            dist/power-mf-me.user.js
+            dist/power-mf-me.meta.js
+          generate_release_notes: true
+
+      - name: Increment Version in package.json
+        run: npm version ${{ github.event.inputs.version-component }} -m "Bump version to %s"
+
+      - name: Push changes to main
+        run: git push origin main
+
+      - name: Check failure status
+        if: failure()
+        run: |
+          git status
+          cat /home/runner/.npm/_logs/*
